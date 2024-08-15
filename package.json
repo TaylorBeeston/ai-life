@@ -3,17 +3,21 @@
     "license": "MIT",
     "module": "src/index.ts",
     "type": "module",
+    "workspaces": [
+        "apps/*",
+        "packages/*",
+        "services/*"
+    ],
+    "scripts": {
+        "dev": "bun run --filter ai-life-backend dev"
+    },
     "devDependencies": {
+        "@flydotio/dockerfile": "^0.5.8",
         "@types/bun": "latest",
         "@types/uuid": "^10.0.0"
     },
     "peerDependencies": {
         "typescript": "^5.0.0"
     },
-    "dependencies": {
-        "@faker-js/faker": "^8.4.1",
-        "@google/generative-ai": "^0.16.0",
-        "immer": "^10.1.1",
-        "uuid": "^10.0.0"
-    }
+    "dependencies": {}
 }

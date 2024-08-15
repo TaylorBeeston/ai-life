@@ -1,0 +1,5 @@
+{
+    "name": "@shared/types",
+    "module": "src/index.ts",
+    "type": "module"
+}

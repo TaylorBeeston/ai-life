@@ -11,7 +11,7 @@ import {
     EmotionalOutput,
     Action,
     Tile,
-} from "./types";
+} from "@shared/types";
 
 const agentEmojis = [
     "👤",

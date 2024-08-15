@@ -1,0 +1,8 @@
+{
+    "name": "@shared/visuals",
+    "module": "src/index.ts",
+    "type": "module",
+    "dependencies": {
+        "@shared/types": "workspace:*"
+    }
+}

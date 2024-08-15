@@ -1,0 +1,18 @@
+{
+    "name": "ai-life-backend",
+    "license": "MIT",
+    "module": "src/index.ts",
+    "type": "module",
+    "scripts": {
+        "start": "bun run src/index.ts",
+        "dev": "bun --watch src/index.ts"
+    },
+    "devDependencies": {},
+    "dependencies": {
+        "@faker-js/faker": "^8.4.1",
+        "@google/generative-ai": "^0.16.0",
+        "@shared/types": "workspace:*",
+        "immer": "^10.1.1",
+        "uuid": "^10.0.0"
+    }
+}

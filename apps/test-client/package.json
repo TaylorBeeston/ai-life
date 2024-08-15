@@ -1,0 +1,14 @@
+{
+    "name": "ai-life-test-client",
+    "license": "MIT",
+    "module": "index.ts",
+    "type": "module",
+    "scripts": {
+        "start": "bun run src/index.ts",
+        "dev": "bun --watch src/index.ts"
+    },
+    "devDependencies": {},
+    "dependencies": {
+        "@shared/visuals": "workspace:*"
+    }
+}

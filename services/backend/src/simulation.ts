@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
-import { WorldState, Agent, Action } from "./types";
+import { WorldState, Agent, Action } from "@shared/types";
 import {
     createAgent,
     perceive,
@@ -8,13 +8,7 @@ import {
     cognitiveProcess,
     executeAction,
 } from "./agent";
-import {
-    createWorld,
-    addAgentToWorld,
-    updateWorld,
-    findSafePosition,
-} from "./world";
-import { visualizeWorld } from "./visualization";
+import { createWorld, addAgentToWorld, updateWorld } from "./world";
 import { logState, loadMostRecentState } from "./persistence";
 import { produce } from "immer";
 
@@ -24,7 +18,7 @@ export const agentLoop = (agent: Agent, world: WorldState): Action => {
     const streamOfConsciousness = cognitiveProcess(
         perception,
         agent.stats,
-        emotionalOutputs,
+        emotionalOutputs
     );
 
     return executeAction(agent, world, streamOfConsciousness);
@@ -47,7 +41,7 @@ export const simulationStep = (world: WorldState): WorldState => {
 
 // Main simulation loop
 export const runSimulation = async (
-    updater?: (world: WorldState) => void | Promise<void>,
+    updater?: (world: WorldState) => void | Promise<void>
 ) => {
     const logDir = path.join(__dirname, "logs");
     if (!fs.existsSync(logDir)) {
@@ -79,6 +73,14 @@ export const runSimulation = async (
         if (stepCount % 100 === 0 && Math.random() > 0.8) {
             const newAgent = createAgent({ x: 0, y: 0 }); // Position will be set in addAgentToWorld
             world = addAgentToWorld(world, newAgent);
+        }
+
+        if (world.agents.length === 0) {
+            world = createWorld(75, 60);
+            for (let i = 0; i < 3; i += 1) {
+                const newAgent = createAgent({ x: 0, y: 0 }); // Position will be set in addAgentToWorld
+                world = addAgentToWorld(world, newAgent);
+            }
         }
     }, 100);
 

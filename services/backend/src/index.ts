@@ -10,7 +10,7 @@ const handleNewConnection = (ws: ServerWebSocket) => {
 };
 
 const server = Bun.serve({
-    port: 3000,
+    port: 5000,
     fetch(req, server) {
         // Upgrade the request to a WebSocket connection
         if (server.upgrade(req)) {

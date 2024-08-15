@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as zlib from "zlib";
 import { promisify } from "util";
-import { WorldState } from "./types";
+import { WorldState } from "@shared/types";
 
 const brotliCompress = promisify(zlib.brotliCompress);
 const brotliDecompress = promisify(zlib.brotliDecompress);

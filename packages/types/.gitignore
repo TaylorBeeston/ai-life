@@ -9,7 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-src/logs/
 
 # Caches
 
@@ -174,6 +173,3 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
-
-# Local Netlify folder
-.netlify
