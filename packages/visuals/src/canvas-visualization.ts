@@ -1,8 +1,6 @@
-// src/visualization.ts
-
 import type { WorldState, TileType, Position } from "@shared/types";
 
-export const CELL_SIZE = 16; // Size of each grid cell in pixels
+const CELL_SIZE = 20; // Base size of each grid cell in pixels
 
 export const COLORS = {
     GRASS: "#2ecc71",
@@ -19,6 +17,10 @@ export class Renderer {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private tileImages: Map<TileType, HTMLImageElement> = new Map();
+    private zoom: number = 1;
+    private panOffset: Position = { x: 0, y: 0 };
+    private worldWidth: number = 0;
+    private worldHeight: number = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -51,22 +53,53 @@ export class Renderer {
         return img;
     }
 
+    public setZoom(zoom: number) {
+        this.zoom = Math.max(0.1, Math.min(5, zoom));
+    }
+
+    public setPan(x: number, y: number) {
+        this.panOffset = { x, y };
+    }
+
     public render(world: WorldState) {
         const { grid, agents, enemies } = world;
-        this.canvas.width = grid[0].length * CELL_SIZE;
-        this.canvas.height = grid.length * CELL_SIZE;
+        this.worldWidth = grid[0].length * CELL_SIZE;
+        this.worldHeight = grid.length * CELL_SIZE;
 
+        this.ctx.save();
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.fillStyle = COLORS.GRASS;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.translate(this.panOffset.x, this.panOffset.y);
+        this.ctx.scale(this.zoom, this.zoom);
 
         this.renderGrid(grid);
         this.renderEntities(agents, "👤");
         this.renderEntities(enemies, "👹");
+
+        this.ctx.restore();
     }
 
     private renderGrid(grid: TileType[][]) {
-        for (let y = 0; y < grid.length; y++) {
-            for (let x = 0; x < grid[y].length; x++) {
+        const startX = Math.max(
+            0,
+            Math.floor(-this.panOffset.x / (CELL_SIZE * this.zoom))
+        );
+        const startY = Math.max(
+            0,
+            Math.floor(-this.panOffset.y / (CELL_SIZE * this.zoom))
+        );
+        const endX = Math.min(
+            grid[0].length,
+            startX + Math.ceil(this.canvas.width / (CELL_SIZE * this.zoom)) + 1
+        );
+        const endY = Math.min(
+            grid.length,
+            startY + Math.ceil(this.canvas.height / (CELL_SIZE * this.zoom)) + 1
+        );
+
+        for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
                 const tile = grid[y][x];
                 const img = this.tileImages.get(tile);
                 if (img) {
@@ -97,6 +130,10 @@ export class Renderer {
                 (y + 0.5) * CELL_SIZE
             );
         });
+    }
+
+    public getWorldDimensions(): { width: number; height: number } {
+        return { width: this.worldWidth, height: this.worldHeight };
     }
 }
 

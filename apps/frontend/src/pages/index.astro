@@ -1,105 +1,60 @@
 ---
+import SimulationDisplay from '../components/SimulationDisplay';
 ---
 
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <title>AI Life Simulation</title>
-    <style>
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-        }
-        #simulation-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #simulation-canvas {
-            border: 1px solid #444;
-            margin-bottom: 20px;
-        }
-        #simulation-info {
-            white-space: pre;
-            font-size: 14px;
-            line-height: 1.2;
-        }
-        #status {
-            color: #4CAF50;
-            margin-bottom: 10px;
-        }
-    </style>
 </head>
 <body>
-    <h1>AI Life Simulation</h1>
-    <div id="status">Connecting to simulation...</div>
-    <div id="simulation-container">
-        <canvas id="simulation-canvas"></canvas>
-        <pre id="simulation-info"></pre>
+    <div class="container">
+        <h1>AI Life Simulation</h1>
+        <div id="simulation-container">
+            <SimulationDisplay client:load />
+        </div>
     </div>
-
-    <script>
-        import { initializeCanvasRenderer, visualizeWorldInfoViaCanvas } from '@shared/visuals';
-
-        const statusElement = document.getElementById('status') as HTMLDivElement;
-        const canvas = document.getElementById('simulation-canvas') as HTMLCanvasElement;
-        const infoElement = document.getElementById('simulation-info') as HTMLPreElement;
-        
-        const renderer = initializeCanvasRenderer(canvas);
-
-        let socket: WebSocket | null = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const reconnectDelay = 3000; // 3 seconds
-
-        function connect() {
-            if (socket) {
-                socket.close();
-            }
-
-            socket = new WebSocket(import.meta.env.PUBLIC_BACKEND_URL || 'wss://ai-life.fly.dev');
-
-            socket.onopen = () => {
-                console.log('Connected to WebSocket server');
-                statusElement.textContent = 'Connected to simulation server';
-                statusElement.style.color = '#4CAF50';
-                reconnectAttempts = 0;
-            };
-
-            socket.onmessage = (event) => {
-                const worldState = JSON.parse(event.data);
-                renderer.render(worldState);
-                infoElement.textContent = visualizeWorldInfoViaCanvas(worldState);
-            };
-
-            socket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                statusElement.textContent = 'Error connecting to simulation server';
-                statusElement.style.color = '#F44336';
-            };
-
-            socket.onclose = (event) => {
-                console.log('Disconnected from WebSocket server');
-                statusElement.textContent = 'Disconnected from simulation server. Attempting to reconnect...';
-                statusElement.style.color = '#FFC107';
-                
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    setTimeout(() => {
-                        reconnectAttempts++;
-                        connect();
-                    }, reconnectDelay);
-                } else {
-                    statusElement.textContent = 'Failed to reconnect after multiple attempts. Please refresh the page.';
-                    statusElement.style.color = '#F44336';
-                }
-            };
-        }
-
-        connect();
-    </script>
 </body>
 </html>
+
+<style is:global>
+    html,body {
+        font-family: 'Arial', sans-serif;
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        width: 100%;
+        height: 100%;
+    }
+    h1 {
+        text-align: center;
+    }
+    #simulation-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    canvas {
+        max-width: 100%;
+        height: auto;
+    }
+    @media (min-width: 768px) {
+        #simulation-container {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+    }
+</style>
