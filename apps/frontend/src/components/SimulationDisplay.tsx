@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import brotli from "brotli-dec-wasm";
 import { Renderer, initializeCanvasRenderer } from "@shared/visuals";
 import type { WorldState } from "@shared/types";
 
@@ -43,7 +44,7 @@ const SimulationDisplay: React.FC = () => {
             }
             return { x: 0, y: 0 };
         },
-        [renderer, worldState, zoom]
+        [renderer, worldState, zoom],
     );
 
     const updateCanvasSize = useCallback(() => {
@@ -84,7 +85,7 @@ const SimulationDisplay: React.FC = () => {
                 if (socket) socket.close();
 
                 socket = new WebSocket(
-                    import.meta.env.PUBLIC_BACKEND_URL || "wss://ai-life.fly.dev"
+                    import.meta.env.PUBLIC_BACKEND_URL || "wss://ai-life.fly.dev",
                 );
 
                 socket.onopen = () => {
@@ -92,9 +93,23 @@ const SimulationDisplay: React.FC = () => {
                     reconnectAttempts = 0;
                 };
 
-                socket.onmessage = (event) => {
-                    const newWorldState = JSON.parse(event.data);
-                    setWorldState(newWorldState);
+                socket.onmessage = async (event) => {
+                    const data = event.data;
+
+                    if (typeof data === "string") {
+                        const newWorldState = JSON.parse(data);
+                        setWorldState(newWorldState);
+                    } else {
+                        const br = await brotli;
+                        const compressedData = await event.data.arrayBuffer();
+                        const decompressedData = br.decompress(
+                            new Uint8Array(compressedData),
+                        );
+                        const newWorldState = JSON.parse(
+                            new TextDecoder().decode(decompressedData),
+                        );
+                        setWorldState(newWorldState);
+                    }
                 };
 
                 socket.onerror = (error) => {
@@ -126,7 +141,7 @@ const SimulationDisplay: React.FC = () => {
         if (renderer && worldState) {
             renderer.setZoom(zoom);
             const followingAgent = worldState.agents.find(
-                (agent) => agent.id === following
+                (agent) => agent.id === following,
             );
             if (followingAgent) {
                 const newPan = calculatePan(followingAgent);

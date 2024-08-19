@@ -1,6 +1,7 @@
 import { ServerWebSocket } from "bun";
 
 import { runSimulation } from "./simulation";
+import { serializeState } from "./persistence";
 
 const clients = new Set<ServerWebSocket>();
 
@@ -32,12 +33,11 @@ const server = Bun.serve({
 
 console.log(`WebSocket server listening on port ${server.port}`);
 
-runSimulation((world) => {
+runSimulation(async (world) => {
     // Broadcast world state to all connected clients
-    const worldUpdate = JSON.stringify(world);
+    const update = await serializeState(world);
+
     clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(worldUpdate);
-        }
+        if (client.readyState === WebSocket.OPEN) client.send(update);
     });
 });
