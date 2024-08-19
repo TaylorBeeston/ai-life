@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import brotli from "brotli-dec-wasm";
+import init, * as brotli from "brotli-dec-wasm/web";
+import wasmUrl from "brotli-dec-wasm/web/bg.wasm?url";
 import { Renderer, initializeCanvasRenderer } from "@shared/visuals";
 import type { WorldState } from "@shared/types";
 
@@ -100,9 +101,9 @@ const SimulationDisplay: React.FC = () => {
                         const newWorldState = JSON.parse(data);
                         setWorldState(newWorldState);
                     } else {
-                        const br = await brotli;
+                        await init(wasmUrl);
                         const compressedData = await event.data.arrayBuffer();
-                        const decompressedData = br.decompress(
+                        const decompressedData = brotli.decompress(
                             new Uint8Array(compressedData),
                         );
                         const newWorldState = JSON.parse(
