@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Renderer, initializeCanvasRenderer } from "@shared/visuals";
 import type { WorldState } from "@shared/types";
 
@@ -20,10 +20,60 @@ const SimulationDisplay: React.FC = () => {
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
     const [following, setFollowing] = useState<string | null>(null);
 
+    const isMobile =
+        typeof window !== "undefined" ? window.innerWidth < 768 : true; // Tailwind md
+
+    const calculatePan = useCallback(
+        (agent: { position: { x: number; y: number } }) => {
+            if (canvasRef.current && renderer) {
+                const canvas = canvasRef.current;
+                const worldDimensions = renderer.getWorldDimensions();
+                const cellSize = worldDimensions.width / worldState!.grid[0].length;
+
+                const agentScreenX = agent.position.x * cellSize * zoom;
+                const agentScreenY = agent.position.y * cellSize * zoom;
+
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+
+                return {
+                    x: centerX - agentScreenX,
+                    y: centerY - agentScreenY,
+                };
+            }
+            return { x: 0, y: 0 };
+        },
+        [renderer, worldState, zoom]
+    );
+
+    const updateCanvasSize = useCallback(() => {
+        if (canvasRef.current) {
+            const canvas = canvasRef.current;
+            const parent = canvas.parentElement;
+            if (parent) {
+                const rect = parent.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                if (renderer) {
+                    renderer.updateCanvasSize(canvas.width, canvas.height, dpr);
+                }
+            }
+        }
+    }, [renderer]);
+
     useEffect(() => {
         if (canvasRef.current) {
             const newRenderer = initializeCanvasRenderer(canvasRef.current);
             setRenderer(newRenderer);
+            updateCanvasSize();
+
+            const resizeObserver = new ResizeObserver(() => {
+                updateCanvasSize();
+            });
+            resizeObserver.observe(canvasRef.current.parentElement!);
 
             let socket: WebSocket | null = null;
             let reconnectAttempts = 0;
@@ -65,23 +115,29 @@ const SimulationDisplay: React.FC = () => {
 
             connect();
 
-            return () => socket?.close();
+            return () => {
+                socket?.close();
+                resizeObserver.disconnect();
+            };
         }
     }, []);
 
     useEffect(() => {
         if (renderer && worldState) {
             renderer.setZoom(zoom);
-            const followingPosition =
-                worldState.agents.find((agent) => agent.id === following)?.position ??
-                pan;
-            renderer.setPan(followingPosition.x, followingPosition.y);
+            const followingAgent = worldState.agents.find(
+                (agent) => agent.id === following
+            );
+            if (followingAgent) {
+                const newPan = calculatePan(followingAgent);
+                setPan(newPan);
+            }
+            renderer.setPan(pan.x, pan.y);
             renderer.render(worldState);
         }
-    }, [renderer, worldState, zoom, pan]);
+    }, [renderer, worldState, zoom, following, calculatePan]);
 
     const handleWheel = (e: React.WheelEvent) => {
-        e.preventDefault();
         const newZoom = zoom * (1 - e.deltaY * 0.001);
         setZoom(Math.max(0.1, Math.min(5, newZoom)));
     };
@@ -106,59 +162,57 @@ const SimulationDisplay: React.FC = () => {
     };
 
     return (
-        <div className="w-full h-full">
-            <canvas
-                className="w-full"
-                ref={canvasRef}
-                width={800}
-                height={600}
-                onWheel={handleWheel}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                style={{ cursor: isDragging ? "grabbing" : "grab" }}
-            />
+        <div className="relative w-full h-full p-1 md:p-4">
+            <div className="h-full w-full">
+                <canvas
+                    className="w-full h-full block"
+                    ref={canvasRef}
+                    onWheel={handleWheel}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    style={{ cursor: isDragging ? "grabbing" : "grab" }}
+                />
+            </div>
             {worldState && (
-                <div>
-                    <h2>Simulation Info</h2>
-                    <output>
+                <output className="absolute bottom-0 ml-1 md:ml-4 mb-2 md:mb-8 p-4 backdrop-blur-md bg-opacity-20 bg-white rounded">
+                    <header className="text-gray-800">
                         Time: {formatTime(worldState.timeOfDay)}{" "}
                         {worldState.isNight ? "🌙" : ""}
-                    </output>
+                    </header>
                     <ul className="w-full flex flex-col gap-1">
                         {worldState.agents.map((agent) => (
                             <li className="w-full p-0" key={agent.id}>
                                 <button
-                                    className="flex h-full w-full gap-2 px-1 justify-between items-center rounded border transition-colors hover:bg-gray-900"
+                                    className={`flex flex-wrap h-full w-full gap-2 px-1 justify-between items-center rounded border transition-colors hover:bg-gray-200 text-gray-800 ${following === agent.id ? "bg-gray-100" : ""
+                                        }`}
                                     type="button"
-                                    onClick={() => setFollowing(agent.id)}
+                                    onClick={() =>
+                                        setFollowing(following === agent.id ? null : agent.id)
+                                    }
                                 >
                                     <span>
                                         {agent.emoji}
                                         {agent.state === "sleeping" && "💤"}
                                     </span>
-
                                     <span>{agent.name}</span>
-
-                                    <span>
-                                        Pos({agent.position.x},{agent.position.y})
-                                    </span>
-
                                     <span>💓: {agent.hp}</span>
-
-                                    <span>Hunger: {agent.stats.hunger.toFixed(0)}</span>
-                                    <span>Fatigue: {agent.stats.fatigue}</span>
-                                    <span>Social: {agent.stats.social}</span>
-
-                                    <span>🍞: {agent.inventory.food}</span>
-                                    <span>🪵: {agent.inventory.wood}</span>
-                                    <span>🌰: {agent.inventory.seeds}</span>
+                                    {(!isMobile || following === agent.id) && (
+                                        <>
+                                            <span>Hunger: {agent.stats.hunger.toFixed(0)}</span>
+                                            <span>Fatigue: {agent.stats.fatigue}</span>
+                                            <span>Social: {agent.stats.social}</span>
+                                            <span>🍞: {agent.inventory.food}</span>
+                                            <span>🪵: {agent.inventory.wood}</span>
+                                            <span>🌰: {agent.inventory.seeds}</span>
+                                        </>
+                                    )}
                                 </button>
                             </li>
                         ))}
                     </ul>
-                </div>
+                </output>
             )}
         </div>
     );

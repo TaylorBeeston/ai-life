@@ -21,11 +21,17 @@ export class Renderer {
     private panOffset: Position = { x: 0, y: 0 };
     private worldWidth: number = 0;
     private worldHeight: number = 0;
+    private dpr: number = 1;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("2d", { alpha: false })!;
         this.initTileImages();
+        this.updateCanvasSize(
+            canvas.width,
+            canvas.height,
+            window.devicePixelRatio || 1
+        );
     }
 
     private initTileImages() {
@@ -40,17 +46,24 @@ export class Renderer {
 
     private createImageFromEmoji(emoji: string): HTMLImageElement {
         const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = CELL_SIZE;
-        tempCanvas.height = CELL_SIZE;
+        tempCanvas.width = CELL_SIZE * 2; // Double the size for higher resolution
+        tempCanvas.height = CELL_SIZE * 2;
         const tempCtx = tempCanvas.getContext("2d")!;
-        tempCtx.font = `${CELL_SIZE}px Arial`;
+        tempCtx.font = `${CELL_SIZE * 2}px Arial`;
         tempCtx.textAlign = "center";
         tempCtx.textBaseline = "middle";
-        tempCtx.fillText(emoji, CELL_SIZE / 2, CELL_SIZE / 2);
+        tempCtx.fillText(emoji, CELL_SIZE, CELL_SIZE);
 
         const img = new Image();
         img.src = tempCanvas.toDataURL();
         return img;
+    }
+
+    public updateCanvasSize(width: number, height: number, dpr: number) {
+        this.canvas.width = width;
+        this.canvas.height = height;
+        this.dpr = dpr;
+        this.ctx.scale(dpr, dpr);
     }
 
     public setZoom(zoom: number) {
@@ -139,43 +152,4 @@ export class Renderer {
 
 export function initializeCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
     return new Renderer(canvas);
-}
-
-export function visualizeWorldInfoViaCanvas(world: WorldState): string {
-    const maxNameLength = Math.max(
-        ...world.agents.map((agent) => agent.name.length)
-    );
-
-    const agentInfo = world.agents
-        .map(
-            (agent) =>
-                `${agent.emoji}${agent.state === "sleeping" ? "💤" : "  "
-                } ${agent.name.padEnd(maxNameLength + 1)}: ` +
-                `Pos(${agent.position.x.toString().padStart(3)},${agent.position.y
-                    .toString()
-                    .padStart(3)}) | ` +
-                `💓: ${agent.hp.toString().padStart(3)} | ` +
-                `Hunger: ${agent.stats.hunger.toFixed(0).padStart(3)} | ` +
-                `Fatigue: ${agent.stats.fatigue.toString().padStart(3)} | ` +
-                `Social: ${agent.stats.social.toString().padStart(3)} | ` +
-                `🍞: ${agent.inventory.food.toString().padStart(3)} | ` +
-                `🪵: ${agent.inventory.wood.toString().padStart(3)} | ` +
-                `🌰: ${agent.inventory.seeds.toString().padStart(3)}`
-        )
-        .join("\n");
-
-    const enemyInfo = `Enemies: ${world.enemies.length}`;
-
-    const formatTime = (minutes: number): string => {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${hours.toString().padStart(2, "0")}:${mins
-            .toString()
-            .padStart(2, "0")}`;
-    };
-
-    const timeInfo = `Time: ${formatTime(world.timeOfDay)} ${world.isNight ? "🌙" : "☀️"
-        }`;
-
-    return `${agentInfo}\n\n${enemyInfo}\n${timeInfo}`;
 }
