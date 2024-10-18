@@ -1,6 +1,6 @@
 ---
 import "../assets/global.css";
-import SimulationDisplay from '../components/SimulationDisplay';
+import HistoryVisualization from '../components/HistoryVisualization';
 ---
 
 <html lang="en">
@@ -9,21 +9,21 @@ import SimulationDisplay from '../components/SimulationDisplay';
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
-    <title>AI Life Simulation</title>
+    <title>AI Life Simulation History</title>
 </head>
 <body>
-    <div class="container p-1 md:p-5">
-        <h1>AI Life Simulation</h1>
-        <a href="/history" class="text-blue-500 hover:text-blue-700">View History</a>
-        <div id="simulation-container">
-            <SimulationDisplay client:load />
+        <div class="container p-1 md:p-5">
+            <h1>AI Life Simulation History</h1>
+            <div id="history-container">
+                <a href="/" class="text-blue-500 hover:text-blue-700">Back To Live</a>
+                <HistoryVisualization client:load />
+            </div>
         </div>
-    </div>
 </body>
 </html>
 
 <style is:global>
-    html,body {
+    html, body {
         font-family: 'Arial', sans-serif;
         background-color: #1e1e1e;
         color: #d4d4d4;
@@ -43,19 +43,15 @@ import SimulationDisplay from '../components/SimulationDisplay';
     h1 {
         text-align: center;
     }
-    #simulation-container {
+    #history-container {
         width: 100%;
         flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
-
-    }
-    canvas {
-        max-width: 100%;
     }
     @media (min-width: 768px) {
-        #simulation-container {
+        #history-container {
             flex-direction: row;
             align-items: flex-start;
         }

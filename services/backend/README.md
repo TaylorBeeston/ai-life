@@ -1,25 +1,35 @@
-# ai-life
+# ai-life backend
 
-To install dependencies:
+If you don't have bun, install it first!
 
 ```bash
-bun install
+npm i -g bun
 ```
 
-To run locally:
+Then, make sure you install dependencies:
 
 ```bash
-bun run src/index.ts
+bun i
 ```
 
-To run a server:
+Then, be sure to set the following environment variables in a `.env` file placed next to this ReadMe:
 
-```bash
-bun run src/server.ts
+```env
+# https://aistudio.google.com/app/apikey
+GEMINI_TOKEN=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+# Any way you'd like to use postgres! I'm using supabase: https://supabase.com/
+DATABASE_URL=postgresql://user:password@dburl.com:PORT/dbname
 ```
 
-To connect a client to a running server:
+Finally, spin up the backend!
 
 ```bash
-bun run src/test-client.ts
+bun run dev
+```
+
+This command will hot reload by restarting the server if you make changes to a file. If you don't like that for some reason, use `start`!
+
+```bash
+bun run start
 ```

@@ -5,24 +5,24 @@ import { tileChars as webTileChars, wrapInFixedWidth } from "./web";
 
 export const visualizeWorldAsText = (
     world: WorldState,
-    style: "web" | "cli" = "web"
+    style: "web" | "cli" = "web",
 ): string => {
     const agentPositions = new Map(
         world.agents.map((agent) => [
             `${agent.position.x},${agent.position.y}`,
             agent.emoji,
-        ])
+        ]),
     );
 
     const enemyPositions = new Map(
         world.enemies.map((enemy) => [
             `${enemy.position.x},${enemy.position.y}`,
             enemy.emoji,
-        ])
+        ]),
     );
 
     const seedPositions = new Map(
-        Object.entries(world.seedGrowthTimers).map(([pos, timer]) => [pos, "🌱"])
+        Object.entries(world.seedGrowthTimers).map(([pos, timer]) => [pos, "🌱"]),
     );
 
     const gridVisual = world.grid
@@ -41,12 +41,12 @@ export const visualizeWorldAsText = (
 
                     return style === "web" ? wrapInFixedWidth(content) : content;
                 })
-                .join("")
+                .join(""),
         )
         .join("\n");
 
     const maxNameLength = Math.max(
-        ...world.agents.map((agent) => agent.name.length)
+        ...world.agents.map((agent) => agent.name.length),
     );
 
     const agentInfo = world.agents
@@ -63,7 +63,7 @@ export const visualizeWorldAsText = (
                 `Social: ${agent.stats.social.toString().padStart(3)} | ` +
                 `🍞: ${agent.inventory.food.toString().padStart(3)} | ` +
                 `🪵: ${agent.inventory.wood.toString().padStart(3)} | ` +
-                `🌰: ${agent.inventory.seeds.toString().padStart(3)}`
+                `🌰: ${agent.inventory.saplings.toString().padStart(3)}`,
         )
         .join("\n");
 

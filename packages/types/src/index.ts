@@ -1,4 +1,4 @@
-export type Item = "wood" | "seeds" | "food";
+export type Item = "wood" | "saplings" | "food";
 export type Position = { x: number; y: number };
 export type Stats = {
     hunger: number;
@@ -44,6 +44,13 @@ export type WorldState = {
     timeOfDay: number; // 0-1439 (minutes in a day)
 };
 
+export type Message = {
+    sender: string;
+    content: string;
+    timestamp: Date;
+    volume: number;
+};
+
 export type Agent = {
     id: string;
     name: string;
@@ -53,6 +60,12 @@ export type Agent = {
     inventory: Inventory;
     emoji: string;
     hp: number;
+    model?: "gemini-1.5-flash"; // TODO: Add more models!
+    context?: string[];
+    perception?: Perception;
+    thoughts?: string;
+    emotions?: EmotionalOutput[];
+    action?: Action;
 };
 
 export type Enemy = {
@@ -67,6 +80,7 @@ export type Perception = {
     nearbyAgents: Agent[];
     nearbyEnemies: Enemy[];
     isNight: boolean;
+    messages: { sender: string; content: string; volume: number }[];
 };
 
 export type EmotionalOutput = {

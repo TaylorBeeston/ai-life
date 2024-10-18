@@ -1,6 +1,7 @@
 import { produce } from "immer";
 import { WorldState, Agent, TileType, Action, Position } from "@shared/types";
 import { createEnemy } from "./enemy";
+import { createMessage } from "./db/operations";
 
 export const canWalk = (tile: TileType) =>
     tile !== TileType.Wall &&
@@ -12,7 +13,7 @@ const createRiver = (
     grid: TileType[][],
     startX: number,
     startY: number,
-    length: number
+    length: number,
 ) => {
     let x = startX;
     let y = startY;
@@ -40,7 +41,7 @@ const createForest = (
     grid: TileType[][],
     centerX: number,
     centerY: number,
-    size: number
+    size: number,
 ) => {
     for (let i = 0; i < size; i++) {
         const angle = Math.random() * 2 * Math.PI;
@@ -78,7 +79,7 @@ export const createWorld = (width: number, height: number): WorldState => {
 
         const length = Math.floor(
             minLength +
-            (maxLength - minLength) * Math.pow(Math.random(), 1 - lengthBias)
+            (maxLength - minLength) * Math.pow(Math.random(), 1 - lengthBias),
         );
 
         createRiver(grid, startX, startY, length);
@@ -106,7 +107,7 @@ export const createWorld = (width: number, height: number): WorldState => {
 
 export const addAgentToWorld = (
     world: WorldState,
-    agent: Agent
+    agent: Agent,
 ): WorldState => {
     return produce(world, (draft) => {
         // Find a suitable location for the house
@@ -146,14 +147,17 @@ export const addAgentToWorld = (
     });
 };
 
-export const updateWorld = (
+export const updateWorldFromAgentAction = async (
     world: WorldState,
     _agent: Agent,
-    action: Action
-): WorldState => {
+    action: Action,
+    runId: string,
+): Promise<WorldState> => {
     const agent = structuredClone(_agent);
 
-    return produce(world, (draft) => {
+    const sideEffects: Promise<any>[] = [];
+
+    const updatedWorldState = produce(world, (draft) => {
         const agentIndex = draft.agents.findIndex((a) => a.id === agent.id);
 
         if (agentIndex > -1) {
@@ -168,7 +172,7 @@ export const updateWorld = (
                     newY >= 0 &&
                     newY < draft.grid.length &&
                     !draft.agents.find(
-                        (agent) => agent.position.x === newX && agent.position.y === newY
+                        (agent) => agent.position.x === newX && agent.position.y === newY,
                     ) &&
                     canWalk(draft.grid[newY][newX])
                 ) {
@@ -190,7 +194,7 @@ export const updateWorld = (
                     (otherAgent) =>
                         otherAgent.id !== agent.id &&
                         Math.abs(otherAgent.position.x - agent.position.x) <= 5 &&
-                        Math.abs(otherAgent.position.y - agent.position.y) <= 5
+                        Math.abs(otherAgent.position.y - agent.position.y) <= 5,
                 );
 
                 if (nearbyAgents.length > 0) {
@@ -198,7 +202,7 @@ export const updateWorld = (
                     nearbyAgents.forEach((nearbyAgent) => {
                         nearbyAgent.stats.social = Math.min(
                             nearbyAgent.stats.social + 5,
-                            100
+                            100,
                         );
                     });
                 } else {
@@ -217,15 +221,17 @@ export const updateWorld = (
                 } else if (target === TileType.Tree) {
                     draft.grid[y][x] = TileType.Grass;
                     agent.inventory.wood += 5;
-                    agent.inventory.seeds += Math.round(Math.random() * 3);
+                    agent.inventory.saplings += Math.round(Math.random() * 3);
                     agent.inventory.food += Math.round(Math.random());
                     agent.stats.fatigue += 5;
                     agent.stats.hunger += agent.stats.fatigue * 0.01;
-                } else if (target === TileType.Water) {
+                } else if (target === TileType.Water && agent.inventory.wood >= 3) {
                     draft.grid[y][x] = TileType.Bridge;
                     agent.inventory.wood -= 3;
                     agent.stats.fatigue += 3;
                     agent.stats.hunger += agent.stats.fatigue * 0.01;
+                } else {
+                    agent.stats.fatigue += 1;
                 }
 
                 agent.stats.hunger += 0.1;
@@ -234,15 +240,15 @@ export const updateWorld = (
 
                 agent.stats.hunger += 0.1;
 
-                if (action.item === "seeds" && draft.grid[y][x] === TileType.Grass) {
-                    agent.inventory.seeds -= 1;
+                if (action.item === "saplings" && draft.grid[y][x] === TileType.Grass) {
+                    agent.inventory.saplings -= 1;
 
                     const seedId = `${x},${y}`;
 
                     draft.seedGrowthTimers[seedId] = 100;
-                } else if (action.item === "food") {
+                } else if (action.item === "food" && agent.inventory.food > 0) {
                     const target = draft.agents.find(
-                        (a) => a.position.x === x && a.position.y === y
+                        (a) => a.position.x === x && a.position.y === y,
                     );
 
                     if (x === agent.position.x && y === agent.position.y) {
@@ -265,24 +271,46 @@ export const updateWorld = (
 
                 agent.stats.hunger += 0.1;
             } else if (action.type === "Talk") {
-                const { volume } = action;
+                const { volume: _volume, message } = action;
+                const volume = Math.min(25, Math.max(1, _volume));
+
+                sideEffects.push(
+                    createMessage({ volume, content: message }, agent, runId),
+                );
+
                 const listeningAgents = draft.agents.filter(
                     (otherAgent) =>
                         otherAgent.id !== agent.id &&
                         otherAgent.state === "awake" &&
                         Math.abs(otherAgent.position.x - agent.position.x) <= volume &&
-                        Math.abs(otherAgent.position.y - agent.position.y) <= volume
+                        Math.abs(otherAgent.position.y - agent.position.y) <= volume,
                 );
 
                 listeningAgents.forEach((listeningAgent) => {
                     listeningAgent.stats.social = Math.min(
                         listeningAgent.stats.social + 10,
-                        100
+                        100,
                     );
+
+                    if (!listeningAgent.perception) {
+                        listeningAgent.perception = {
+                            messages: [],
+                            visibleArea: [],
+                            nearbyAgents: [],
+                            nearbyEnemies: [],
+                            isNight: draft.isNight,
+                        };
+                    }
+
+                    listeningAgent.perception.messages.push({
+                        sender: agent.name,
+                        content: message,
+                        volume,
+                    });
                 });
 
                 agent.stats.social = Math.min(agent.stats.social + 10, 100);
-                agent.stats.fatigue += 1;
+                agent.stats.fatigue += 1 + _volume / 25;
                 agent.stats.hunger += 0.5;
             } else if (action.type === "Build") {
                 const { structure, position } = action;
@@ -299,14 +327,14 @@ export const updateWorld = (
 
                 const target =
                     draft.enemies.find(
-                        (enemy) => enemy.position.x === x && enemy.position.y === y
+                        (enemy) => enemy.position.x === x && enemy.position.y === y,
                     ) ||
                     draft.agents.find((a) => a.position.x === x && a.position.y === y);
 
                 if (x === agent.position.x && y === agent.position.y) {
                     agent.hp -= 20;
                 } else if (target) {
-                    target.hp -= 20;
+                    target.hp -= 30;
                 }
 
                 agent.stats.fatigue += 10;
@@ -331,7 +359,15 @@ export const updateWorld = (
 
             draft.agents[agentIndex] = agent;
         }
+    });
 
+    await Promise.all(sideEffects);
+
+    return updatedWorldState;
+};
+
+export const updateWorld = (world: WorldState): WorldState => {
+    return produce(world, (draft) => {
         // Update building projects
         draft.buildingProjects = draft.buildingProjects.filter((project) => {
             project.progress += 10;
@@ -347,8 +383,8 @@ export const updateWorld = (
         draft.isNight = draft.timeOfDay >= 20 * 60 || draft.timeOfDay < 6 * 60;
 
         // Spawn or remove enemies based on time of day
-        if (draft.isNight && draft.enemies.length < draft.agents.length * 2) {
-            if (draft.timeOfDay % 60 === 0) {
+        if (draft.isNight && draft.enemies.length < draft.agents.length) {
+            if (draft.timeOfDay % 60 === 0 && Math.random() > 0.5) {
                 // Every hour at night
                 const newEnemy = createEnemy(findSafePosition(draft));
                 draft.enemies.push(newEnemy);
@@ -365,11 +401,11 @@ export const updateWorld = (
             const nearbyAgent = draft.agents.find(
                 (agent) =>
                     Math.abs(agent.position.x - enemy.position.x) <= 1 &&
-                    Math.abs(agent.position.y - enemy.position.y) <= 1
+                    Math.abs(agent.position.y - enemy.position.y) <= 1,
             );
 
             if (nearbyAgent) {
-                nearbyAgent.hp -= 15;
+                nearbyAgent.hp -= 5;
             } else {
                 // Move randomly
                 const direction = Math.floor(Math.random() * 4);

@@ -12,6 +12,9 @@ import {
     Action,
     Tile,
 } from "@shared/types";
+import { NPC_MESSAGES } from "./constants";
+import { sampleArray } from "./utils";
+import { getRecentMessages } from "./db/operations";
 
 const agentEmojis = [
     "👤",
@@ -30,54 +33,133 @@ const agentEmojis = [
 ];
 
 // Agent functions
-export const createAgent = (position: Position): Agent => ({
+export const createAgent = (
+    position: Position,
+    model?: "gemini-1.5-flash",
+): Agent => ({
     id: uuidv4(),
     name: faker.person.fullName(),
     position,
     stats: { hunger: 0, fatigue: 0, social: 100 },
     state: "awake",
-    inventory: { wood: 0, seeds: 0, food: 0 },
+    inventory: { wood: 0, saplings: 0, food: 0 },
     emoji: agentEmojis[Math.floor(Math.random() * agentEmojis.length)],
     hp: 100,
+    model,
+    context: model ? [] : undefined,
 });
 
-export const perceive = (agent: Agent, world: WorldState): Perception => {
+const isObstacle = (tileType: TileType): boolean => {
+    return [
+        TileType.House,
+        TileType.Wall,
+        TileType.Tree,
+        TileType.Door,
+        TileType.LockedDoor,
+    ].includes(tileType);
+};
+
+const raycast = (
+    start: Position,
+    end: Position,
+    world: WorldState,
+): TileType => {
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    const sx = start.x < end.x ? 1 : -1;
+    const sy = start.y < end.y ? 1 : -1;
+    let err = dx - dy;
+
+    let x = start.x;
+    let y = start.y;
+
+    while (true) {
+        if (x === end.x && y === end.y) {
+            return world.grid[y][x];
+        }
+
+        if (x < 0 || x >= world.grid[0].length || y < 0 || y >= world.grid.length) {
+            return TileType.Wall; // Treat out of bounds as walls
+        }
+
+        const tile = world.grid[y][x];
+        if (isObstacle(tile)) {
+            return tile;
+        }
+
+        const agentAtPosition = world.agents.find(
+            (a) => a.position.x === x && a.position.y === y,
+        );
+        if (agentAtPosition) {
+            return TileType.Grass; // Treat other agents as obstacles
+        }
+
+        const enemyAtPosition = world.enemies.find(
+            (e) => e.position.x === x && e.position.y === y,
+        );
+        if (enemyAtPosition) {
+            return TileType.Grass; // Treat enemies as obstacles
+        }
+
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+            err -= dy;
+            x += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y += sy;
+        }
+    }
+};
+
+export const perceive = async (
+    agent: Agent,
+    world: WorldState,
+): Promise<Perception> => {
     const { x, y } = agent.position;
     const visibleArea: TileType[][] = [];
+    const viewDistance = Math.min(
+        Math.max(world.grid.length, world.grid[0].length),
+        10,
+    );
 
-    for (let dy = -1; dy <= 1; dy++) {
+    for (let dy = -viewDistance; dy <= viewDistance; dy++) {
         const row: TileType[] = [];
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = -viewDistance; dx <= viewDistance; dx++) {
             const newX = x + dx;
             const newY = y + dy;
-            if (
-                newX >= 0 &&
-                newX < world.grid[0].length &&
-                newY >= 0 &&
-                newY < world.grid.length
-            ) {
-                row.push(world.grid[newY][newX]);
-            } else {
-                row.push(TileType.Wall); // Treat out of bounds as walls
-            }
+            const endPosition = { x: newX, y: newY };
+            const tile = raycast(agent.position, endPosition, world);
+            row.push(tile);
         }
         visibleArea.push(row);
     }
 
     const nearbyAgents = world.agents.filter(
         (other) =>
-            Math.abs(other.position.x - x) <= 1 &&
-            Math.abs(other.position.y - y) <= 1 &&
-            other.id !== agent.id,
+            other.id !== agent.id &&
+            Math.abs(other.position.x - x) <= viewDistance &&
+            Math.abs(other.position.y - y) <= viewDistance &&
+            !isObstacle(raycast(agent.position, other.position, world)),
     );
 
     const nearbyEnemies = world.enemies.filter(
         (enemy) =>
-            Math.abs(enemy.position.x - x) <= 1 &&
-            Math.abs(enemy.position.y - y) <= 1,
+            Math.abs(enemy.position.x - x) <= viewDistance &&
+            Math.abs(enemy.position.y - y) <= viewDistance &&
+            !isObstacle(raycast(agent.position, enemy.position, world)),
     );
 
-    return { visibleArea, nearbyAgents, nearbyEnemies, isNight: world.isNight };
+    const messages = await getRecentMessages(nearbyAgents);
+
+    return {
+        visibleArea,
+        nearbyAgents,
+        nearbyEnemies,
+        isNight: world.isNight,
+        messages,
+    };
 };
 
 // Emotional processing
@@ -88,10 +170,57 @@ const processEmotion = (
     perception: Perception,
     stats: Stats,
 ): EmotionalOutput => {
+    if (emotion === "joy") {
+        let baseJoy = 0;
+
+        if (!perception.isNight) baseJoy += 1;
+        if (perception.nearbyAgents.length > 0) baseJoy += 1;
+        if (stats.hunger < 50) baseJoy += 1;
+        if (stats.social > 50) baseJoy += 1;
+        if (stats.fatigue < 50) baseJoy += 1;
+
+        return { emotion, intensity: baseJoy / 5 };
+    }
+
+    if (emotion === "fear") {
+        let baseFear = 0;
+
+        if (perception.isNight) baseFear += 1;
+        if (perception.nearbyAgents.length === 0) baseFear += 1;
+        if (stats.hunger > 90) baseFear += 1;
+        if (stats.fatigue > 95) baseFear += 1;
+
+        return { emotion, intensity: baseFear / 4 };
+    }
+
+    if (emotion === "anger") {
+        let baseAnger = 0;
+
+        if (perception.isNight) baseAnger += 1;
+        if (perception.nearbyEnemies.length > 0) baseAnger += 1;
+        if (stats.hunger > 50) baseAnger += 1;
+        if (stats.social < 20) baseAnger += 1;
+        if (stats.fatigue > 70) baseAnger += 1;
+
+        return { emotion, intensity: baseAnger / 5 };
+    }
+
+    if (emotion === "sadness") {
+        let baseSadness = 0;
+
+        if (perception.isNight) baseSadness += 1;
+        if (perception.nearbyEnemies.length > 0) baseSadness += 1;
+        if (stats.hunger > 50) baseSadness += 1;
+        if (stats.social < 20) baseSadness += 1;
+        if (stats.fatigue > 70) baseSadness += 1;
+
+        return { emotion, intensity: baseSadness / 5 };
+    }
+
     // Simplified emotional processing
     return {
         emotion,
-        intensity: Math.random(),
+        intensity: Math.random() * 0.1 + 0.45,
     };
 };
 
@@ -111,7 +240,7 @@ export const cognitiveProcess = (
     return "Thinking about moving...";
 };
 
-const getAdjacentActions = (agent: Agent, world: WorldState): Tile[] => {
+export const getAdjacentActions = (agent: Agent, world: WorldState): Tile[] => {
     const { x, y } = agent.position;
     const adjacentPositions = [
         { x: x - 1, y },
@@ -138,9 +267,9 @@ const getAdjacentActions = (agent: Agent, world: WorldState): Tile[] => {
         .filter(
             (tile) =>
                 tile.type === TileType.Tree ||
-                tile.type === TileType.Water ||
+                (tile.type === TileType.Water && agent.inventory.wood > 2) ||
                 tile.type === TileType.Door ||
-                (tile.type === TileType.Grass && agent.inventory.seeds > 0),
+                (tile.type === TileType.Grass && agent.inventory.saplings > 0),
         );
 };
 
@@ -222,11 +351,12 @@ const shouldBuild = (agent: Agent, world: WorldState): boolean => {
     return agent.inventory.wood >= 5 && Math.random() < 0.3; // 30% chance to build if enough wood
 };
 
-export const executeAction = (
+export const executeAction = async (
     agent: Agent,
     world: WorldState,
     streamOfConsciousness: string,
-): Action => {
+    perception: Perception,
+): Promise<Action> => {
     if (agent.stats.fatigue > 99 || agent.state === "sleeping") {
         return { type: "Sleep" };
     }
@@ -234,8 +364,6 @@ export const executeAction = (
     if (agent.stats.hunger > 40 && agent.inventory.food > 0) {
         return { type: "Use", item: "food", position: agent.position };
     }
-
-    const perception = perceive(agent, world);
 
     if (perception.nearbyEnemies.length > 0) {
         return { type: "Attack", position: perception.nearbyEnemies[0].position };
@@ -249,6 +377,17 @@ export const executeAction = (
             Math.abs(otherAgent.position.x - agent.position.x) <= 10 &&
             Math.abs(otherAgent.position.y - agent.position.y) <= 10,
     );
+
+    if (perception.messages.length > 0) {
+        const smartAgents = world.agents.filter((a) => a.model);
+        return {
+            type: "Talk",
+            volume: 100,
+            message: smartAgents
+                .map((a) => `${a.name} is at (${a.position.x},${a.position.y}).`)
+                .join(" "),
+        };
+    }
 
     if (nearbyAgents.length > 0 && Math.random() > 0.7) {
         // Find the closest agent
@@ -270,7 +409,11 @@ export const executeAction = (
                 return { type: "Use", item: "food", position: closestAgent.position };
             }
 
-            return { type: "Talk", volume: 1, message: "Hi!" };
+            return {
+                type: "Talk",
+                volume: 1,
+                message: sampleArray(NPC_MESSAGES),
+            };
         }
 
         // Otherwise, move towards the closest agent
@@ -316,13 +459,17 @@ export const executeAction = (
 
         if (chopAction) return { type: "Interact", position: chopAction.position };
 
-        if (agent.inventory.seeds > 0) {
+        if (agent.inventory.saplings > 0) {
             const plantAction = adjacentActions.find(
                 (action) => action.type === TileType.Grass,
             );
 
             if (plantAction && Math.random() > 0.9) {
-                return { type: "Use", item: "seeds", position: plantAction.position };
+                return {
+                    type: "Use",
+                    item: "saplings",
+                    position: plantAction.position,
+                };
             }
         }
 

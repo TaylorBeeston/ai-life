@@ -15,6 +15,9 @@
         "paths": {
             "@shared/*": [
                 "packages/*/src/index.ts"
+            ],
+            "@/*": [
+                "${configDir}/src/*"
             ]
         },
         // Bundler mode

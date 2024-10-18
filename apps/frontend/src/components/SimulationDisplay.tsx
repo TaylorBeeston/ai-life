@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import init, * as brotli from "brotli-dec-wasm/web";
 import wasmUrl from "brotli-dec-wasm/web/bg.wasm?url";
 import { Renderer, initializeCanvasRenderer } from "@shared/visuals";
-import type { WorldState } from "@shared/types";
+import type { WorldState, Message } from "@shared/types";
 
 const formatTime = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -141,6 +141,13 @@ const SimulationDisplay: React.FC = () => {
     useEffect(() => {
         if (renderer && worldState) {
             renderer.setZoom(zoom);
+            renderer.setPan(pan.x, pan.y);
+            renderer.render(worldState);
+        }
+    }, [renderer, worldState, zoom, following, pan]);
+
+    useEffect(() => {
+        if (worldState && following) {
             const followingAgent = worldState.agents.find(
                 (agent) => agent.id === following,
             );
@@ -148,10 +155,8 @@ const SimulationDisplay: React.FC = () => {
                 const newPan = calculatePan(followingAgent);
                 setPan(newPan);
             }
-            renderer.setPan(pan.x, pan.y);
-            renderer.render(worldState);
         }
-    }, [renderer, worldState, zoom, following, calculatePan]);
+    }, [worldState, following, calculatePan]);
 
     const handleWheel = (e: React.WheelEvent) => {
         const newZoom = zoom * (1 - e.deltaY * 0.001);
@@ -177,6 +182,10 @@ const SimulationDisplay: React.FC = () => {
         setIsDragging(false);
     };
 
+    const messages = worldState?.messages?.slice(-5) ?? [];
+
+    console.log(worldState);
+
     return (
         <div className="relative w-full h-full p-1 md:p-4">
             <div className="h-full w-full">
@@ -192,43 +201,62 @@ const SimulationDisplay: React.FC = () => {
                 />
             </div>
             {worldState && (
-                <output className="absolute bottom-0 ml-1 md:ml-4 mb-2 md:mb-8 p-4 backdrop-blur-md bg-opacity-20 bg-white rounded">
-                    <header className="text-gray-800">
-                        Time: {formatTime(worldState.timeOfDay)}{" "}
-                        {worldState.isNight ? "🌙" : ""}
-                    </header>
-                    <ul className="w-full flex flex-col gap-1">
-                        {worldState.agents.map((agent) => (
-                            <li className="w-full p-0" key={agent.id}>
-                                <button
-                                    className={`flex flex-wrap h-full w-full gap-2 px-1 justify-between items-center rounded border transition-colors hover:bg-gray-200 text-gray-800 ${following === agent.id ? "bg-gray-100" : ""
-                                        }`}
-                                    type="button"
-                                    onClick={() =>
-                                        setFollowing(following === agent.id ? null : agent.id)
-                                    }
-                                >
-                                    <span>
-                                        {agent.emoji}
-                                        {agent.state === "sleeping" && "💤"}
-                                    </span>
-                                    <span>{agent.name}</span>
-                                    <span>💓: {agent.hp}</span>
-                                    {(!isMobile || following === agent.id) && (
-                                        <>
-                                            <span>Hunger: {agent.stats.hunger.toFixed(0)}</span>
-                                            <span>Fatigue: {agent.stats.fatigue}</span>
-                                            <span>Social: {agent.stats.social}</span>
-                                            <span>🍞: {agent.inventory.food}</span>
-                                            <span>🪵: {agent.inventory.wood}</span>
-                                            <span>🌰: {agent.inventory.seeds}</span>
-                                        </>
-                                    )}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </output>
+                <>
+                    {messages.length > 0 && (
+                        <div className="absolute top-0 left-0 m-4 p-2 bg-black bg-opacity-50 rounded">
+                            <h3 className="text-white font-bold mb-2">Recent Messages:</h3>
+                            <ul className="text-white">
+                                {messages.map((msg, index) => (
+                                    <li key={index} className="mb-1">
+                                        <span className="font-bold">{msg.sender}:</span>{" "}
+                                        {msg.content}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    <output className="absolute bottom-0 ml-1 md:ml-4 mb-2 md:mb-8 p-4 backdrop-blur-md bg-opacity-20 bg-white rounded">
+                        <header className="text-gray-800">
+                            Time: {formatTime(worldState.timeOfDay)}{" "}
+                            {worldState.isNight ? "🌙" : ""}
+                        </header>
+
+                        <ul className="w-full flex flex-col gap-1">
+                            {worldState.agents.map((agent) => (
+                                <li className="w-full p-0" key={agent.id}>
+                                    <button
+                                        className={`flex flex-wrap h-full w-full gap-2 px-1 justify-between items-center rounded border transition-colors hover:bg-gray-200 text-gray-800 ${following === agent.id ? "bg-gray-100" : ""
+                                            }`}
+                                        type="button"
+                                        onClick={() =>
+                                            setFollowing(following === agent.id ? null : agent.id)
+                                        }
+                                    >
+                                        <span>
+                                            {agent.emoji}
+                                            {agent.state === "sleeping" && "💤"}
+                                        </span>
+                                        <span>
+                                            {agent.name}
+                                            {agent.model ? `(${agent.model})` : ""}
+                                        </span>
+                                        <span>💓: {agent.hp}</span>
+                                        {(!isMobile || following === agent.id) && (
+                                            <>
+                                                <span>Hunger: {agent.stats.hunger.toFixed(0)}</span>
+                                                <span>Fatigue: {agent.stats.fatigue.toFixed(0)}</span>
+                                                <span>Social: {agent.stats.social}</span>
+                                                <span>🍞: {agent.inventory.food}</span>
+                                                <span>🪵: {agent.inventory.wood}</span>
+                                                <span>🌰: {agent.inventory.saplings}</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </output>
+                </>
             )}
         </div>
     );
